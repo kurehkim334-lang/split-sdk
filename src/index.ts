@@ -7,12 +7,23 @@ import type { StellarSplitClientConfig } from "./client.js";
 import type { ExportFormat } from "./export.js";
 
 export { StellarSplitClient } from "./client.js";
+export { FinalityChecker } from "./finalityChecker.js";
+export { buildPaymentMemo, parsePaymentMemo } from "./memoBuilder.js";
 export type {
   StellarSplitClientConfig,
   NetworkConfig,
   TxResult,
   StellarSplitPlugin,
 } from "./client.js";
+
+export {
+  NetworkEnvironment,
+  NETWORK_PRESETS,
+  isNetworkPreset,
+  getNetworkPreset,
+  detectNetworkEnvironment,
+} from "./config.js";
+export type { NetworkPreset } from "./config.js";
 
 export type {
   TelemetryHooks,
@@ -21,13 +32,22 @@ export type {
   TelemetryCallEndParams,
 } from "./telemetryHooks.js";
 
-export { PluginRegistry, LoggingPlugin } from "./plugin.js";
-export type { SdkPlugin, SdkMethodName, PluginArgs, PluginResult } from "./plugin.js";
+export { PluginRegistry, LoggingPlugin, MetricsPlugin } from "./plugin.js";
+export type { SdkPlugin, SdkMethodName, PluginArgs, PluginResult, StellarSplitClientContext } from "./plugin.js";
 
 export {
   serializeInvoiceTemplate,
   deserializeInvoiceTemplate,
 } from "./invoiceTemplate.js";
+export {
+  validateBulkImport,
+  SUPPORTED_SCHEMA_VERSIONS,
+} from "./bulkImportValidator.js";
+export type {
+  BulkImportRowError,
+  BulkImportValidationResult,
+  BulkImportPayload,
+} from "./bulkImportValidator.js";
 export {
   StellarSplitError,
   InvoiceNotFoundError,
@@ -86,6 +106,7 @@ export {
   Sep41AdapterError,
   TrancheProgressError,
   RefundGraceError,
+  PreflightError,
   ChannelReconciliationError,
   SequenceCacheError,
   SequenceNumberTooOldError,
@@ -93,6 +114,10 @@ export {
   PathRouterError,
   OfferTrackingError,
   ClaimableBalanceLifecycleError,
+  InvoiceFullyFundedError,
+  isInvoiceFullyFundedError,
+  DelegateLimitReachedError,
+  isDelegateLimitReachedError,
   isInvoiceNotFoundError,
   isInvoiceNotPendingError,
   isDeadlinePassedError,
@@ -148,6 +173,7 @@ export {
   isSep41AdapterError,
   isTrancheProgressError,
   isRefundGraceError,
+  isPreflightError,
   isChannelReconciliationError,
   isSequenceCacheError,
   isSequenceNumberTooOldError,
@@ -161,6 +187,8 @@ export {
   isRequestTimeoutError,
   AdminOperationError,
   isAdminOperationError,
+  NetworkMismatchError,
+  isNetworkMismatchError,
   CommitmentGenerationError,
   isCommitmentGenerationError,
   BlindingFactorStorageError,
@@ -192,7 +220,26 @@ export {
   ClassifiedHorizonError,
   isClassifiedHorizonError,
   HorizonErrorClassification,
+  FinalityTimeoutError,
+  isFinalityTimeoutError,
+  ApprovalTimeoutError,
+  isApprovalTimeoutError,
+  // New: typed SdkError / SdkErrorCode (issue #607)
+  SdkError,
+  SdkErrorCode,
+  isSdkError,
+  // Keypair format and signing validation (issue #768)
+  InvalidKeypairError,
+  isInvalidKeypairError,
+  // Batch operations errors (issue #855)
+  BatchTooLargeError,
+  isBatchTooLargeError,
 } from "./errors.js";
+
+// Invoice metadata JSON Schema validator (issue #533)
+export { InvoiceMetadataValidator } from "./validators/invoiceMetadataValidator.js";
+export type { MetadataValidationResult } from "./validators/invoiceMetadataValidator.js";
+export { validateMetadataKeys, MAX_METADATA_KEY_LENGTH } from "./validators/invoiceMetadataValidator.js";
 
 // ---------------------------------------------------------------------------
 // Lifecycle management (graceful shutdown)
@@ -217,6 +264,8 @@ export type {
   SpeedscopeEvent,
   ProfilerSessionOptions,
 } from "./profiler.js";
+export { MemoryProfiler, memoryProfiler, ProfilerNotInitializedError } from "./memoryProfiler.js";
+export type { MemorySnapshot } from "./memoryProfiler.js";
 export {
   enrichInvoice,
   enrichInvoices,
@@ -225,6 +274,7 @@ export {
   getInvoiceMetadataCID,
 } from "./enricher.js";
 export type { EnrichedInvoice, EnrichOptions } from "./enricher.js";
+export { EnricherCache } from "./enricher.js";
 
 // IPFS functionality
 export {
@@ -262,6 +312,13 @@ export { Deduplicator } from "./dedup.js";
 export { TxQueue } from "./queue.js";
 
 export { replayEvents } from "./events.js";
+export { sdkEvents } from "./events.js";
+export type { FinalityServerLike } from "./finalityChecker.js";
+export { ApprovalWorkflowSequencer, ApprovalSession } from "./approvalWorkflowSequencer.js";
+export type { ApprovalWorkflowOptions, NotificationAdapter, SignatureApplier } from "./approvalWorkflowSequencer.js";
+export { OperationChunker, MAX_OPERATIONS_PER_TRANSACTION } from "./operationChunker.js";
+export { StreamHealthProbe } from "./streamHealthProbe.js";
+export type { MonitoredStream, StreamHealthProbeOptions } from "./streamHealthProbe.js";
 export {
   EventChecksumChain,
   verifyChain,
@@ -282,9 +339,46 @@ export { ResilientRpcClient } from "./resilientRpc.js";
 export type { RetryConfig } from "./resilientRpc.js";
 
 export { connectWallet, getPublicKey, signTransaction } from "./wallet.js";
+export { LobstrAdapter } from "./wallets/adapters/LobstrAdapter.js";
+export type { LobstrAdapterOptions } from "./wallets/adapters/LobstrAdapter.js";
+export { WalletConnectionTimeoutError, isWalletConnectionTimeoutError } from "./errors.js";
 
 export { checkRPCHealth } from "./health.js";
 export { FallbackChain, FallbackExhaustedError } from "./fallbackChain.js";
+
+// ---------------------------------------------------------------------------
+// #544 — Soroban Contract Event Log Subscriber
+// ---------------------------------------------------------------------------
+
+export { ContractEventSubscriber } from "./contractEventSubscriber.js";
+export type {
+  ContractEventFilter,
+  ParsedContractEvent,
+  ContractEventSubscriberConfig,
+} from "./contractEventSubscriber.js";
+
+// ---------------------------------------------------------------------------
+// #546 — Horizon Endpoint Availability Prober
+// ---------------------------------------------------------------------------
+
+export { HorizonProber } from "./horizonProber.js";
+export type {
+  HorizonProbeResult,
+  HorizonProberConfig,
+} from "./horizonProber.js";
+
+// Invoice calculator
+export {
+  calculateSplitAmounts,
+  computeAmounts,
+  formatSplitPercentage,
+  calculateInvoiceSubtotal,
+  calculateInvoiceBreakdown,
+} from "./invoice/calculator.js";
+
+// Fee estimator
+export { estimateFeeForAmount } from "./feeEstimator.js";
+export type { FeeForAmountOpts } from "./feeEstimator.js";
 
 // AMM Calculator
 export { estimateSwapOutput, calculatePoolShare } from "./ammCalculator.js";
@@ -304,11 +398,20 @@ export { watchContractUpgrade } from "./upgrade.js";
 
 export { calculateFee } from "./fee.js";
 
+export { formatAddress } from "./utils.js";
+
 export { resolveToken } from "./token.js";
 
 export { watchExpiry } from "./watcher.js";
 
 export { DeadlineEngine } from "./deadlineEngine.js";
+
+export { LedgerCloseEstimator } from "./ledgerCloseEstimator.js";
+export type {
+  LedgerCloseEstimatorOptions,
+  LedgerRecord,
+  CalibrationState,
+} from "./ledgerCloseEstimator.js";
 
 export { StellarSplitTxBuilder } from "./txBuilder.js";
 
@@ -317,11 +420,18 @@ export type { SequenceCacheConfig } from "./sequenceCache.js";
 
 export { PathRouter } from "./pathRouter.js";
 export type { PathResult, PathHop, PathRequest, PathRouterConfig } from "./pathRouter.js";
+export { PathQueryBuilder } from "./pathQueryBuilder.js";
+export type {
+  StrictSendQueryParams,
+  StrictReceiveQueryParams,
+  PathQueryBuilderConfig,
+} from "./pathQueryBuilder.js";
+export type { PathQuery, PathQueryResult, StrictSendPathQuery, StrictReceivePathQuery } from "./types.js";
 
 export { OfferTracker } from "./offerTracker.js";
 export type { OfferTrackerConfig, OfferTrackerEventMap } from "./offerTracker.js";
 
-export { SimpleCache } from "./cache.js";
+export { SimpleCache, Cache } from "./cache.js";
 export { Recorder, createRecorder } from "./recorder.js";
 export type { SessionRecording, RecordingEntry, ReplayResult } from "./recorder.js";
 
@@ -383,9 +493,16 @@ export type {
   DecodedXDR,
   DecodedTransactionEnvelope,
   DecodedTransactionResult,
+  DecodedOperationResult,
   DecodedTransactionMeta,
   DecodedLedgerEntry,
   DecodedOperation,
+  FinalityStatus,
+  FinalityCheckConfig,
+  MultiSigPolicy,
+  ApprovalSessionResult,
+  BatchPaymentResult,
+  ChunkSubmitter,
 } from "./types.js";
 export { InvalidTransitionError } from "./types.js";
 
@@ -403,7 +520,7 @@ export { TimeoutManager, withTimeout, EscalationManager, RequestTimeoutError as 
 export type { TimeoutConfig, EscalationEvent, EscalationCallback } from "./timeout.js";
 
 // Trace IDs (Issue #2)
-export { TraceIdManager, globalTraceIdManager } from "./traceId.js";
+export { TraceIdManager, globalTraceIdManager, generateTraceId } from "./traceId.js";
 export type { TraceIdGenerator } from "./traceId.js";
 
 // Injectable RpcClient (Issue #3)
@@ -413,8 +530,11 @@ export type { RpcClient } from "./rpcClient.js";
 export { negotiateVersion, SDK_CONTRACT_VERSION } from "./version.js";
 export type { VersionInfo } from "./types.js";
 
-export { checkPayerReadiness, checkInvoiceExpiry, checkSponsorReserve } from "./preflightChecker.js";
-export type { PayerReadinessResult, PayerReadinessReason, InvoiceExpiryResult, InvoiceExpiryReason, SponsorReserveCheck } from "./preflightChecker.js";
+export { checkPayerReadiness, checkInvoiceExpiry, checkSponsorReserve, checkRecipientFlags, runPreflight } from "./preflightChecker.js";
+export type { PayerReadinessResult, PayerReadinessReason, InvoiceExpiryResult, InvoiceExpiryReason, SponsorReserveCheck, RecipientFlagsCheck, RunPreflightOptions } from "./preflightChecker.js";
+
+export { inspectFlags, hasAnyRestrictiveFlag } from "./accountFlagsInspector.js";
+export type { AccountFlagSet } from "./types.js";
 
 export { getSuggestion } from "./errorSuggestions.js";
 
@@ -422,7 +542,8 @@ export { getSuggestion } from "./errorSuggestions.js";
 // XDR Decoder — structured logging of Stellar XDR
 // ---------------------------------------------------------------------------
 
-export { decodeXDR } from "./xdrDecoder.js";
+export { decodeXDR, decode, decodeInt128 } from "./xdrDecoder.js";
+export { decodeTransactionResult } from "./txResultDecoder.js";
 
 // ---------------------------------------------------------------------------
 // SSE Cursor Tracker — persistent cursor for stream resumption
@@ -483,6 +604,13 @@ export type {
   Subscription,
   SubscriptionOptions,
   SubscriptionLifecycleEvent,
+  // Issue #844 — dry-run simulation surface
+  SimulationResult,
+  LedgerFootprint,
+  SimulateMutationOptions,
+  MaybeSimulated,
+  // Issue #850 — clone field overrides
+  InvoiceParamOverrides,
   // New: AMM Calculator
   PoolSwapEstimate,
   PoolShareResult,
@@ -568,12 +696,48 @@ export {
   generatePaymentReceipt,
   serializePaymentReceipt,
   deserializePaymentReceipt,
+  finalizePaymentReceipt,
+  // Local receipt registry (hash-based lookup)
+  registerReceipt,
+  getReceiptByTxHash,
+  getAllReceipts,
+  clearReceipts,
 } from "./receipt.js";
 export type {
   PaymentReceipt,
   PaymentReceiptJSON,
   InvoiceFetcher,
+  ReceiptConfig,
 } from "./receipt.js";
+
+// Transaction operation effect aggregator
+export { aggregateEffects } from "./effectAggregator.js";
+export type { AccountEffectSummary, AssetDelta } from "./types.js";
+
+// Multi-asset invoice line item normalizer
+export { normalizeLineItems } from "./lineItemNormalizer.js";
+export { ContractPriceOracle } from "./priceOracle.js";
+export type { PriceOracle } from "./priceOracle.js";
+export type {
+  InvoiceLineItem,
+  NormalizedLineItem,
+  NormalizedInvoiceTotal,
+} from "./types.js";
+export { UnsupportedLineItemAssetError, isUnsupportedLineItemAssetError } from "./errors.js";
+
+// Contract invocation retry queue
+export { ContractRetryQueue } from "./contractRetryQueue.js";
+export type { ContractInvocationExecutor, ContractRetryQueueConfig } from "./contractRetryQueue.js";
+export type { ContractInvocation, ContractResult } from "./types.js";
+export { ContractRetryExhaustedError, isContractRetryExhaustedError } from "./errors.js";
+
+// Invoice batch processor with concurrency limiter
+export { InvoiceBatchProcessor } from "./invoiceBatchProcessor.js";
+export type {
+  BatchInvoiceResult,
+  InvoiceBatchConfig,
+  InvoicePaymentSubmitter,
+} from "./invoiceBatchProcessor.js";
 
 // Merkle proof functionality
 export { generateMerkleProof, verifyMerkleProof } from "./merkle.js";
@@ -585,7 +749,10 @@ export { SimulationSandbox } from "./sandbox/SimulationSandbox.js";
 export type {
   SandboxClient,
   SimulationCost,
-  SimulationResult,
+  // The sandbox result type is re-exported under an unambiguous alias so it
+  // does not collide with the RPC `SimulationResult` (issue #844) exported
+  // from `./types.js` above.
+  SimulationResult as SandboxSimulationResult,
   SandboxInvoiceRecord,
   SandboxPaymentRecord,
   SandboxCallLogEntry,
@@ -618,10 +785,12 @@ export type {
 export {
   AdaptiveThrottle,
   DEFAULT_PENALTY_DURATION_MS,
+  DEFAULT_MAX_BACKOFF_MS,
 } from "./throttle/AdaptiveThrottle.js";
 export type { AdaptiveThrottleConfig, ThrottleStats } from "./throttle/AdaptiveThrottle.js";
 export { parseRateLimitHeaders } from "./throttle/RateLimitParser.js";
 export type { HeadersLike, RateLimitInfo } from "./throttle/RateLimitParser.js";
+export { parseRetryAfter } from "./throttle/RateLimitParser.js";
 
 // Receipt chain — SHA-256-linked, tamper-evident payment receipt history
 // per invoice. `PaymentReceipt` is aliased to `ChainPaymentReceipt` here to
@@ -678,6 +847,15 @@ export type {
 export { ScheduledPaymentManager } from "./scheduler.js";
 export type { ScheduledPayment } from "./scheduler.js";
 
+export { InvoiceReminderScheduler, DEFAULT_GRACE_PERIOD_MS } from "./invoiceReminderScheduler.js";
+export type {
+  InvoiceReminderSchedulerEventMap,
+  InvoiceDueAtResolver,
+  InvoiceReminderSchedulerOptions,
+} from "./invoiceReminderScheduler.js";
+export { loadReminderSchedules, saveReminderSchedules } from "./snapshot.js";
+export type { ReminderSchedule, ReminderEvent, ReminderStatus } from "./types.js";
+
 export { compileFilter, applyFilter, FilterIndex } from "./invoiceFilter.js";
 export type { FilterCriteria, CompiledFilter } from "./invoiceFilter.js";
 
@@ -685,18 +863,29 @@ export type { FilterCriteria, CompiledFilter } from "./invoiceFilter.js";
 export { diffInvoices, hasDiff } from "./diff.js";
 export type { InvoiceDiff, InvoiceDiffEntry } from "./diff.js";
 
-export { diffSimulations } from "./simulationDiff.js";
+export { diffSimulations, compareSimulations, formatDiffSummary } from "./simulationDiff.js";
 export type {
   SimulationDiff,
   SimulationDiffSuccess,
   SimulationDiffNotComparable,
   ResourceDelta,
+  SimulationComparison,
+  SimulationComparisonNotComparable,
 } from "./simulationDiff.js";
 
 // Payment velocity tracking
 export { trackVelocity } from "./velocityTracker.js";
 export type { VelocityReport, InvoiceVelocity, PaymentTrend } from "./velocityTracker.js";
 export type { VelocityStatus, VelocityWindowStatus } from "./types.js";
+
+// Issue #866 — Pause/Resume invoice
+export type { PauseStatus } from "./types.js";
+
+// Issue #867 — Pledge matching
+export type { MatchPledge } from "./types.js";
+
+// Issue #868 — Streaming payments
+export type { Stream } from "./types.js";
 
 // Tranche release progress tracking
 export { getTrancheProgress } from "./trancheProgress.js";
@@ -708,8 +897,41 @@ export type {
   TranchedInvoice,
   TrancheStatus,
 } from "./trancheProgress.js";
+
+// Invoice payment progress tracking
+export { PaymentProgressTracker } from "./paymentProgressTracker.js";
+export type {
+  PaymentProgressEventMap,
+  PaymentProgressTrackerOptions,
+} from "./paymentProgressTracker.js";
+export type { InvoicePaymentProgress, RecipientPaymentState } from "./types.js";
+
+// Fiat-to-asset price oracle adapter
+export { CoinGeckoPriceOracle } from "./priceOracle.js";
+export type { CoinGeckoPriceOracleOptions } from "./priceOracle.js";
+export { RateCache } from "./rateCache.js";
+export type { RateCacheConfig } from "./rateCache.js";
+export type { PriceOracleAdapter } from "./types.js";
+export { convertFiatToAsset } from "./currencyConverter.js";
+export type { FiatConversion, ConvertedAmount } from "./currencyConverter.js";
+
 export { Sep41Adapter, createSep41Adapter } from "./sep41Adapter.js";
 export type { Sep41TokenCapabilities } from "./sep41Adapter.js";
+
+export { Sep31Initiator, resolveDirectPaymentServer } from "./sep/sep31Initiator.js";
+export type {
+  Sep31InitiatorEventMap,
+  Sep31Asset,
+  Sep31PartyInfo,
+  Sep31InitiateParams,
+} from "./sep/sep31Initiator.js";
+export type {
+  Sep31PaymentRecord,
+  Sep31Status,
+  Sep31StatusChangedEvent,
+  Sep31FieldSpec,
+  Sep31RequiredFields,
+} from "./types.js";
 
 export { HorizonFallbackReader } from "./horizonFallback.js";
 export type { NormalizedAccount, NormalizedBalance } from "./horizonFallback.js";
@@ -772,6 +994,12 @@ export type {
   ClaimableBalanceLifecycleEventMap,
 } from "./claimableBalanceFallback.js";
 
+export { PredicateBuilder } from "./predicateBuilder.js";
+export type { ClaimPredicate } from "./predicateBuilder.js";
+export type { PredicateConfig } from "./types.js";
+
+export type { RateCacheEntry, RateOracleFn } from "./rateCache.js";
+
 export { subscribeToInvoice } from "./sse.js";
 export type {
   SSEInvoiceEventType,
@@ -808,6 +1036,11 @@ export type {
 export { IdempotencyManager } from "./idempotency.js";
 export type { IdempotencyConfig } from "./idempotency.js";
 
+export { RollbackCoordinator } from "./splitRollbackCoordinator.js";
+export type { SplitRollbackEventMap } from "./splitRollbackCoordinator.js";
+export type { SplitRollbackRecord } from "./snapshot.js";
+export type { SplitLeg, SplitLegState, SplitResult, SplitRollbackCheckpoint } from "./types.js";
+
 export {
   validateInvoicePayload,
   PayloadSizeError,
@@ -831,10 +1064,49 @@ export type {
 } from "./forecast.js";
 
 // ---------------------------------------------------------------------------
+// #852 — Deadline helpers
+// ---------------------------------------------------------------------------
+
+export {
+  deadlineFromDays,
+  deadlineFromDate,
+  isDeadlineValid,
+  timeUntilDeadline,
+  formatDeadline,
+} from "./deadline.js";
+export type { DeadlineRemaining } from "./deadline.js";
+
+// ---------------------------------------------------------------------------
+// #853 — Payment aggregator (multi-invoice budget allocation)
+// ---------------------------------------------------------------------------
+
+export {
+  aggregatePayments,
+  createInvoiceRemainingFetcher,
+  registerInvoiceRemainingFetcher,
+  remainingForInvoice,
+} from "./paymentAllocation.js";
+export type {
+  AggregatePaymentsOptions,
+  AmountLookup,
+  InvoiceRemainingFetcher,
+  InvoiceSource,
+  PaymentAllocation,
+  SplitStrategy,
+} from "./paymentAllocation.js";
+
+
+// ---------------------------------------------------------------------------
 // Split ratio validator
 // ---------------------------------------------------------------------------
 
-export { validateSplitRatios, validateSplitRatiosOrThrow, ratiosToRecipients } from "./validators/splitRatioValidator.js";
+export {
+  validateSplitRatios,
+  validateSplitRatiosOrThrow,
+  ratiosToRecipients,
+  validateSplitTotal,
+  normalizeSplits,
+} from "./validators/splitRatioValidator.js";
 export type {
   RecipientShare,
   SplitConfig,
@@ -845,7 +1117,7 @@ export type {
 // Trustline checker
 // ---------------------------------------------------------------------------
 
-export { checkTrustlines, checkSingleTrustline } from "./trustlineChecker.js";
+export { checkTrustlines, checkSingleTrustline, checkTrustlinesBatch } from "./trustlineChecker.js";
 export type { TrustlineEntry, TrustlineCheckResult } from "./trustlineChecker.js";
 
 // ---------------------------------------------------------------------------
@@ -879,8 +1151,20 @@ export type {
   ChannelStateFetcher,
 } from "./channelReconciler.js";
 export { getInvoiceStats, computeInvoiceStats } from "./invoiceStats.js";
+export { getInvoiceAge, getFundingVelocity } from "./invoiceStats.js";
+export type { InvoiceAge } from "./invoiceStats.js";
 
 export { previewSplitRules } from "./splitPreview.js";
+
+// ---------------------------------------------------------------------------
+// #545 — Invoice Split Preview Change Diff Generator
+// ---------------------------------------------------------------------------
+
+export { generateSplitDiff } from "./splitPreview.js";
+export type {
+  SplitConfigDiff,
+  ChangedShare,
+} from "./splitPreview.js";
 
 export { simulateAutoResolve } from "./autoResolveSimulator.js";
 
@@ -944,9 +1228,11 @@ export {
   submitBridgePayment,
   computePayloadHash,
   DEFAULT_CHAIN_CONFIGS,
+  SUPPORTED_CHAIN_IDS,
+  BridgeChainMismatchError,
 } from "./bridge.js";
 
-export type { ChainBridgeConfig, BridgeConfig } from "./bridge.js";
+export type { ChainBridgeConfig, BridgeConfig, BridgeOptions } from "./bridge.js";
 
 export type {
   ChainId,
@@ -962,6 +1248,7 @@ export type {
   TimelineEntry,
   TimelineEventType,
   TimelineSource,
+  TimelineEntryStatus,
   ReconstructedTimeline,
   RebuildOptions,
 } from "./types/timeline.js";
@@ -1000,7 +1287,29 @@ export type { WaterfallConfig, WaterfallTier, WaterfallPlan, WaterfallStep } fro
 // ---------------------------------------------------------------------------
 
 export { OptimisticCache } from "./cache/OptimisticCache.js";
-export type { RollbackEvent, OptimisticEntry } from "./cache/OptimisticCache.js";
+export type {
+  OptimisticCacheOptions,
+  RevalidateErrorEvent,
+  RollbackEvent,
+  OptimisticEntry,
+} from "./cache/OptimisticCache.js";
+
+// ---------------------------------------------------------------------------
+// Split payment execution (pre-flight subentry guard + ratio validation)
+// ---------------------------------------------------------------------------
+
+export {
+  splitExecutor,
+  SPLIT_RATIO_TOLERANCE,
+  SplitRatioSumError,
+  sumRecipientRatios,
+  validateSplitRatioSum,
+} from "./payments/splitExecutor.js";
+export type {
+  SplitRecipient,
+  SplitExecutorOptions,
+  SplitExecutionResult,
+} from "./payments/splitExecutor.js";
 
 // ---------------------------------------------------------------------------
 // Typed, zero-dependency event emitter (works in Node, browser, and edge runtimes)
@@ -1009,6 +1318,31 @@ export type { RollbackEvent, OptimisticEntry } from "./cache/OptimisticCache.js"
 export { TypedEventEmitter, AbortError } from "./events/TypedEventEmitter.js";
 export type { Unsubscribe, EventMap } from "./events/TypedEventEmitter.js";
 export type { SplitClientEventMap } from "./client.js";
+
+// ---------------------------------------------------------------------------
+// SDK event bus — typed contract events (issue #856)
+// ---------------------------------------------------------------------------
+
+export type {
+  PaymentEvent,
+  ReleaseEvent,
+  RefundEvent,
+  DisputeEvent,
+  TierUnlockedEvent,
+  EventFilterOptions,
+  ContractEvent,
+} from "./contractEvents.js";
+
+// ---------------------------------------------------------------------------
+// Creator statistics (issue #854)
+// ---------------------------------------------------------------------------
+
+export type { CreatorStats } from "./creatorStats.js";
+export {
+  getCreatorStatsCache,
+  setCreatorStatsCache,
+  clearCreatorStatsCache,
+} from "./creatorStats.js";
 
 // ---------------------------------------------------------------------------
 // Multi-endpoint RPC load balancing
@@ -1112,3 +1446,148 @@ export type {
   ScValPrimitive,
   ContractStorageExporterOptions,
 } from "./diagnostics/ContractStorageExporter.js";
+
+// ---------------------------------------------------------------------------
+// #528 — AccountDataManager: typed CRUD for account data entries
+// ---------------------------------------------------------------------------
+
+export { AccountDataManager } from "./accountDataManager.js";
+export type {
+  AccountDataManagerConfig,
+  TransactionResult as AccountDataTransactionResult,
+} from "./accountDataManager.js";
+export type { AccountDataEntry, AccountDataMap } from "./types.js";
+export {
+  DataEntryValidationError,
+  isDataEntryValidationError,
+} from "./errors.js";
+
+// ---------------------------------------------------------------------------
+// #529 — SorobanFeatureDetector: protocol upgrade / feature flag detection
+// ---------------------------------------------------------------------------
+
+export { SorobanFeatureDetector } from "./sorobanFeatureDetector.js";
+export type {
+  SorobanFeatureDetectorConfig,
+  SorobanFeatureDetectorEventMap,
+} from "./sorobanFeatureDetector.js";
+export type { SorobanFeatureFlags } from "./types.js";
+
+// ---------------------------------------------------------------------------
+// #530 — StreamDeduplicator: paging-token-based stream event dedup
+// ---------------------------------------------------------------------------
+
+export { StreamDeduplicator } from "./streamDeduplicator.js";
+export type {
+  StreamDeduplicatorOptions,
+  StreamDeduplicatorEventMap,
+} from "./streamDeduplicator.js";
+export {
+  InMemoryDedupTokenStore,
+  setDefaultDedupTokenStore,
+  saveDedupTokens,
+  loadDedupTokens,
+} from "./snapshot.js";
+export type { DedupTokenStore } from "./snapshot.js";
+
+// ---------------------------------------------------------------------------
+// #531 — Per-Split Audit Log Emitter
+// ---------------------------------------------------------------------------
+
+export { AuditLogger } from "./auditLogger.js";
+export type { AuditEntry } from "./auditLogger.js";
+export type { SplitAuditEntry } from "./types.js";
+export {
+  exportSplitAuditTrail,
+  SPLIT_AUDIT_CSV_COLUMNS,
+} from "./complianceExporter.js";
+
+// ---------------------------------------------------------------------------
+// #589 — Pluggable Signing Key Vault Adapter
+// ---------------------------------------------------------------------------
+
+export type { Signer } from "./signing/signer.js";
+export { KeypairSigner } from "./signing/adapters/KeypairSigner.js";
+export { EncryptedFileSigner } from "./signing/adapters/EncryptedFileSigner.js";
+export type {
+  EncryptedFileSignerOptions,
+} from "./signing/adapters/EncryptedFileSigner.js";
+export {
+  encryptSigningKeyToPem,
+  writeEncryptedSigningKeyFile,
+} from "./signing/adapters/EncryptedFileSigner.js";
+export { CloudKmsSigner, isRegionError } from "./signing/adapters/CloudKmsSigner.js";
+export type {
+  KmsClient,
+  KmsClientSignOptions,
+  CloudKmsSignerOptions,
+  CloudKmsSignerEventMap,
+} from "./signing/adapters/CloudKmsSigner.js";
+
+// ---------------------------------------------------------------------------
+// #588 — Soroban Transaction Footprint Optimizer
+// ---------------------------------------------------------------------------
+
+export {
+  optimizeFootprint,
+  simulateFootprint,
+  clearFootprintSimulationCache,
+} from "./soroban/footprint.js";
+export type {
+  OptimizeFootprintOptions,
+  FootprintLogger,
+} from "./soroban/footprint.js";
+export { footprintDiff } from "./utils/footprintDiff.js";
+export type { FootprintDiff } from "./utils/footprintDiff.js";
+export { submitTransaction } from "./transaction/submit.js";
+export type {
+  SubmitTransactionOptions,
+  SubmitServer,
+} from "./transaction/submit.js";
+
+// Request queue with priority lanes
+export { RequestQueue } from "./requestQueue.js";
+export type { PriorityLane, QueuedRequest, QueueStats } from "./requestQueue.js";
+
+// Invoice history retrieval and parsing
+export { getInvoiceHistory, getHistoryPage, parseHistoryEvent } from "./invoiceHistory.js";
+export type {
+  HistoryEntry,
+  HistoryEventType,
+  HistoryPage,
+  HistoryPageOptions,
+  PaymentHistoryEntry,
+  ReleaseHistoryEntry,
+  RefundHistoryEntry,
+  NoteHistoryEntry,
+  PauseHistoryEntry,
+  ResumeHistoryEntry,
+  CancelHistoryEntry,
+  FreezeHistoryEntry,
+  UnfreezeHistoryEntry,
+} from "./types/invoiceHistory.js";
+
+// Template management
+export {
+  saveTemplate,
+  createFromTemplate,
+  deleteTemplate,
+  getTemplate,
+  listTemplates,
+  TemplateNotFoundError,
+  TemplateAccessDeniedError,
+} from "./templates.js";
+export type { InvoiceTemplate, CreateFromTemplateParams, SaveTemplateParams } from "./types/templates.js";
+
+// Recurring subscriptions
+export {
+  createSubscription,
+  triggerSubscription,
+  pauseSubscription,
+  resumeSubscription,
+  getSubscription,
+  cancelSubscription,
+  SubscriptionNotFoundError,
+  TooEarlyToTriggerError,
+} from "./subscriptions.js";
+export type { Subscription, SubscriptionStatus, CreateSubscriptionParams } from "./types/subscriptions.js";

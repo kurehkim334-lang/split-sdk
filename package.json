@@ -28,6 +28,21 @@
       "types": "./dist/utils.d.ts",
       "import": "./dist/utils.js",
       "require": "./dist/utils.cjs"
+    },
+    "./mock": {
+      "types": "./dist/mock/index.d.ts",
+      "import": "./dist/mock/index.js",
+      "require": "./dist/mock/index.cjs"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js",
+      "require": "./dist/react/index.cjs"
+    },
+    "./telemetry": {
+      "types": "./dist/telemetryModule.d.ts",
+      "import": "./dist/telemetryModule.js",
+      "require": "./dist/telemetryModule.cjs"
     }
   },
   "files": [
@@ -37,11 +52,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "test": "vitest run test/client.test.ts test/retryPolicy.test.ts test/property-roundtrip.test.ts test/property-address.test.ts test/property-deadline.test.ts test/property-invoice-params.test.ts test/property-client-invariants.test.ts",
-    "test": "vitest run test/client.test.ts test/retryPolicy.test.ts test/resilience.test.ts",
-    "test": "vitest run test/client.test.ts test/multiTenant.test.ts",
-    "test": "vitest run test/client.test.ts test/profiler.test.ts",
-    "test": "vitest run test/client.test.ts test/retryPolicy.test.ts",
+    "test": "vitest run test/client.test.ts test/retryPolicy.test.ts test/network-environment.test.ts",
     "test:ui": "vitest run test/ui/",
     "test:all": "vitest run",
     "test:e2e": "vitest run test/e2e",
@@ -49,7 +60,9 @@
     "lint": "tsc --noEmit",
     "changelog": "vite-node scripts/changelog.ts",
     "docs": "ts-node scripts/generate-docs.ts",
-    "size-audit": "tsx scripts/bundle-size-audit.ts"
+    "size-audit": "tsx scripts/bundle-size-audit.ts",
+    "bundle:check": "tsx scripts/bundle-size-guard.ts",
+    "bundle:update-baseline": "BUNDLE_BASELINE_UPDATE=true tsx scripts/bundle-size-guard.ts"
   },
   "dependencies": {
     "@ledgerhq/hw-app-str": "^6.29.0",
@@ -57,7 +70,8 @@
     "@noble/curves": "^2.2.0",
     "@stellar/freighter-api": "^3.1.0",
     "@stellar/stellar-sdk": "^13.3.0",
-    "@walletconnect/sign-client": "^2.23.9"
+    "@walletconnect/sign-client": "^2.23.9",
+    "ajv": "^8.20.0"
   },
   "devDependencies": {
     "@opentelemetry/api": "^1.9.0",
@@ -71,6 +85,7 @@
     "@types/node": "^25.9.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "esbuild": "^0.27.7",
     "fake-indexeddb": "^6.2.5",
     "fast-check": "^4.9.0",
     "graphql": "^16.14.0",
@@ -80,6 +95,7 @@
     "size-limit": "^12.1.0",
     "ts-node": "^10.9.2",
     "tsup": "^8.5.1",
+    "tsx": "^4.23.1",
     "typescript": "^5.9.3",
     "vitest": "^1.6.1"
   },
